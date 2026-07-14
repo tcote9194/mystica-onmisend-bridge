@@ -15,6 +15,7 @@ repoints the bridge without a code edit.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Iterator, Optional
 
 from bridge import config
@@ -26,6 +27,23 @@ log = logging.getLogger("bridge.render_db")
 
 class RenderConfigError(RuntimeError):
     """Raised when Render is asked for data without a connection string."""
+
+
+def _clean_dsn(raw: Optional[str]) -> str:
+    """Extract the real ``postgres(ql)://…`` URL from a possibly-mangled env value.
+
+    Railway (and hand-editing) can wrap the connection string in ways libpq rejects:
+    a leading ``=`` (the classic ``invalid connection option ""`` crash), a stray
+    ``KEY=`` prefix, wrapping quotes, a ``psql `` prefix, or surrounding whitespace/CRLF.
+    A valid Postgres URL contains no whitespace and starts at the scheme, so we strip
+    wrapping quotes/space, slice from the first ``postgres://``/``postgresql://`` we find,
+    and strip any trailing quote. If no scheme is present we return the stripped value
+    unchanged (so a genuinely bad value still surfaces a clear libpq error)."""
+    s = (raw or "").strip().strip("'\"").strip()
+    m = re.search(r"postgres(?:ql)?://", s)
+    if m:
+        s = s[m.start():]
+    return s.strip().strip("'\"").strip()
 
 
 class RenderDB:
@@ -47,12 +65,22 @@ class RenderDB:
             return self._connect(self._dsn)
         import psycopg  # lazy — not needed for unit tests / import
 
-        # ``.strip()`` guards against a stray newline/space in the env value. Read-only
-        # is enforced with a session SET *after* connecting rather than the libpq
-        # ``options=`` connect kwarg — that kwarg (its value contains a space) mis-
-        # serialized on the deploy host's psycopg build and raised "invalid connection
-        # option". The SET is version-independent and equally strict (writes raise).
-        conn = psycopg.connect(self._dsn.strip(), autocommit=True)
+        # ``_clean_dsn`` strips any wrapping (leading ``=``, quotes, ``KEY=`` prefix,
+        # ``psql `` prefix, whitespace/CRLF) that a copy-paste into the Railway variable
+        # editor can introduce — a leading ``=`` in particular makes libpq parse the value
+        # as keyword-format and crash with ``invalid connection option ""``.
+        dsn = _clean_dsn(self._dsn)
+        host = "?"
+        try:  # log the resolved host only (never the password) so a bad value is diagnosable
+            host = re.sub(r"^.*@", "", dsn).split("/", 1)[0] or "?"
+        except Exception:  # pragma: no cover
+            pass
+        log.info("render connect: host=%s dsn_len=%d", host, len(dsn))
+        # Read-only is enforced with a session SET *after* connecting rather than the libpq
+        # ``options=`` connect kwarg — that kwarg (its value contains a space) mis-serialized
+        # on the deploy host's psycopg build. The SET is version-independent and equally
+        # strict (any write raises).
+        conn = psycopg.connect(dsn, autocommit=True)
         conn.execute("SET default_transaction_read_only TO on")
         return conn
 

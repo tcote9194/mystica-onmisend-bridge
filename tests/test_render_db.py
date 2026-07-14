@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from bridge.render_db import RenderDB
+from bridge.render_db import RenderDB, _clean_dsn
 
 
 class _FakeCursor:
@@ -49,6 +49,25 @@ def _factory(router):
         return conn
 
     return connect
+
+
+def test_clean_dsn_unmangles_railway_paste_variants():
+    base = "postgresql://user:PW@dpg-x.oregon-postgres.render.com/db?sslmode=require"
+    variants = {
+        "clean": base,
+        "leading_eq": "=" + base,                 # the actual Railway crash: invalid option ""
+        "name_prefix": "RENDER_DATABASE_URL=" + base,
+        "dquoted": '"' + base + '"',
+        "squoted": "'" + base + "'",
+        "psql_prefix": "psql " + base,
+        "spaced": "  " + base + "  ",
+        "crlf": "\r\n" + base + "\r\n",
+    }
+    for label, raw in variants.items():
+        assert _clean_dsn(raw) == base, label
+    # a value with no scheme is returned stripped (surfaces a clear libpq error, not a silent hang)
+    assert _clean_dsn("  not-a-url  ") == "not-a-url"
+    assert _clean_dsn(None) == ""
 
 
 def test_roster_sql_quotes_reserved_table_and_filters(monkeypatch):
