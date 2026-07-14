@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.railpack.com",
-  "build": { "installCommands": ["pip install ."] },
+  "build": { "installCommands": ["pip install -r requirements.txt"] },
   "deploy": {
-    "startCommand": "python -m bridge.cli run --live"
+    "startCommand": "PYTHONPATH=src python -m bridge.cli run --live"
   }
 }
