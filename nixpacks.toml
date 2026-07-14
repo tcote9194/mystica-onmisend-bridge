@@ -1,0 +1,6 @@
+# Railway build config. Install phase ONLY — never a [start] section here
+# (Railway generates railpack.json for the start command; a [start] here conflicts).
+# `pip install .` installs the src-layout `bridge` package (+ its deps from
+# pyproject) so `python -m bridge.cli` resolves at runtime.
+[phases.install]
+cmds = ["pip install ."]

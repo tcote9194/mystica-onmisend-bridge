@@ -1,0 +1,4 @@
+# Runtime deps (kept in sync with pyproject.toml; Railway/nixpacks reads this).
+httpx>=0.27
+psycopg[binary]>=3.1
+python-dotenv>=1.0
