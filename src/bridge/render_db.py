@@ -47,12 +47,14 @@ class RenderDB:
             return self._connect(self._dsn)
         import psycopg  # lazy — not needed for unit tests / import
 
-        # Force read-only transactions server-side regardless of the role's grants.
-        return psycopg.connect(
-            self._dsn,
-            autocommit=True,
-            options="-c default_transaction_read_only=on",
-        )
+        # ``.strip()`` guards against a stray newline/space in the env value. Read-only
+        # is enforced with a session SET *after* connecting rather than the libpq
+        # ``options=`` connect kwarg — that kwarg (its value contains a space) mis-
+        # serialized on the deploy host's psycopg build and raised "invalid connection
+        # option". The SET is version-independent and equally strict (writes raise).
+        conn = psycopg.connect(self._dsn.strip(), autocommit=True)
+        conn.execute("SET default_transaction_read_only TO on")
+        return conn
 
     # ------------------------------------------------------------------ reads
     def _select(self, sql: str, params: tuple = ()) -> list[tuple]:
