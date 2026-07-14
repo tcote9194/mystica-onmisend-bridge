@@ -84,13 +84,15 @@ def test_recency_cutoff_disabled_with_zero(monkeypatch):
     assert "interval" not in sql
 
 
-def test_fetch_roster_maps_five_columns(monkeypatch):
-    rows = [("u1", "a@x.com", "2026-01-01", "2026-01-01", "2026-07-01")]
+def test_fetch_roster_maps_columns(monkeypatch):
+    rows = [("u1", "a@x.com", "2026-01-01", "2026-01-01", "2026-07-01", "Alice Smith")]
     db = RenderDB(dsn="x", connect=_factory(lambda sql: rows))
     roster = db.fetch_roster()
     assert roster[0].user_id == "u1"
     assert roster[0].email == "a@x.com"
     assert roster[0].last_seen_at == "2026-07-01"
+    assert roster[0].name == "Alice Smith"
+    assert roster[0].first_name == "Alice"  # first token of the display name
 
 
 def test_fetch_interaction_aggregates_merges_chats_draws_readings(monkeypatch):

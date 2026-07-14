@@ -29,11 +29,14 @@ def _mask_email(email: str) -> str:
 
 
 def summarize_tags(plan: ChangePlan) -> Counter:
-    """How many contacts each tag would be added to (the headline 'N tagged app:
-    install vs the ~600 baseline' number)."""
+    """How many contacts each tag would be added to (across both tagged-existing and
+    newly-created contacts)."""
     c: Counter = Counter()
     for change in plan.changes:
         for tag in change.add_tags:
+            c[tag] += 1
+    for cr in plan.creates:
+        for tag in cr.tags:
             c[tag] += 1
     return c
 
@@ -42,6 +45,9 @@ def summarize_props(plan: ChangePlan) -> Counter:
     c: Counter = Counter()
     for change in plan.changes:
         for prop in change.set_props:
+            c[prop] += 1
+    for cr in plan.creates:
+        for prop in cr.props:
             c[prop] += 1
     return c
 
@@ -69,6 +75,9 @@ def render_report(plan: ChangePlan, report: RunReport, *, sample: int = 10) -> s
         f"Plan: {verb} {plan.touched} contacts "
         f"({plan.diff_fraction:.1%} of audience)"
     )
+    if plan.creates:
+        verb_c = "WOULD create" if report.mode == "dry_run" else "created"
+        lines.append(f"  {verb_c} {len(plan.creates)} NEW contacts (subscribed)")
     tags = summarize_tags(plan)
     if tags:
         lines.append("  tags to add:")
@@ -88,7 +97,10 @@ def render_report(plan: ChangePlan, report: RunReport, *, sample: int = 10) -> s
                 f"props={list(change.set_props)}"
             )
     if report.mode != "dry_run":
-        lines.append(f"Applied: {report.applied}  Errors: {report.errors}")
+        lines.append(
+            f"Applied: {report.applied}  Created: {report.created}  "
+            f"Errors: {report.errors}"
+        )
     if report.notes:
         lines.append("Notes: " + "; ".join(report.notes))
     return "\n".join(lines)

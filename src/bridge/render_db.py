@@ -100,9 +100,12 @@ class RenderDB:
             self._qi(config.render_signed_up_at_col()),
         ]
         # 5th column: last_seen (app recency) if configured, else a NULL placeholder
-        # so fetch_roster can always unpack a fixed 5-tuple.
+        # so fetch_roster can always unpack a fixed tuple.
         last_seen = config.render_last_seen_at_col().strip()
         parts.append(self._qi(last_seen) if last_seen else "NULL")
+        # 6th column: display name (for firstName on contact creation).
+        name = config.render_name_col().strip()
+        parts.append(self._qi(name) if name else "NULL")
         sql = f"SELECT {', '.join(parts)} FROM {self._qi(config.render_users_table())}"
         where = self._customer_where()
         if where:
@@ -118,7 +121,7 @@ class RenderDB:
         """
         rows = self._select(self._roster_sql())
         out: list[RenderUser] = []
-        for uid, email, installed_at, signed_up_at, last_seen_at in rows:
+        for uid, email, installed_at, signed_up_at, last_seen_at, name in rows:
             out.append(
                 RenderUser(
                     user_id=str(uid) if uid is not None else "",
@@ -126,6 +129,7 @@ class RenderDB:
                     installed_at=(str(installed_at) if installed_at is not None else None),
                     signed_up_at=(str(signed_up_at) if signed_up_at is not None else None),
                     last_seen_at=(str(last_seen_at) if last_seen_at is not None else None),
+                    name=(str(name) if name not in (None, "") else None),
                 )
             )
         log.info("render roster: %d users", len(out))

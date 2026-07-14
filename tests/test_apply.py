@@ -33,7 +33,7 @@ def test_guardrail_trips_over_fraction(monkeypatch):
 def test_force_bypasses_guardrail(monkeypatch):
     monkeypatch.setenv("DRY_RUN", "true")
     plan = _plan(40, 100)
-    applied, errors = apply_plan(
+    applied, created, errors = apply_plan(
         plan, client=_client(lambda r: httpx.Response(200, json={})), force=True
     )
     assert applied == 40 and errors == 0  # dry-run: gated no-ops, still "applied"
@@ -51,7 +51,7 @@ def test_per_contact_error_isolated(monkeypatch):
             return httpx.Response(400, json={"error": "bad"})
         return httpx.Response(200, json={})
 
-    applied, errors = apply_plan(plan, client=_client(handler))
+    applied, created, errors = apply_plan(plan, client=_client(handler))
     assert applied == 2 and errors == 1  # c1 failed, others fine
 
 

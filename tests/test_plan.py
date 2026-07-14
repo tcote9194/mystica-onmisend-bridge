@@ -50,6 +50,29 @@ def test_unresolved_emails_counted_not_written():
     assert plan.touched == 1  # only the matched contact is in the plan
 
 
+def test_create_missing_queues_unresolved_as_creates():
+    desired = {
+        "here@x.com": DesiredContact("here@x.com", tags={config.TAG_INSTALL}),
+        "missing@x.com": DesiredContact("missing@x.com", tags={config.TAG_INSTALL},
+                                        props={config.PROP_RENDER_USER_ID: "u9"},
+                                        first_name="Dana"),
+    }
+    current = {"here@x.com": _current("here@x.com")}
+
+    # Default: missing is unresolved, not created.
+    plan = build_plan(desired, current)
+    assert plan.unresolved_emails == 1 and not plan.creates
+
+    # create_missing=True: missing becomes a create (tags + a source tag + name).
+    plan = build_plan(desired, current, create_missing=True)
+    assert plan.unresolved_emails == 0 and len(plan.creates) == 1
+    cr = plan.creates[0]
+    assert cr.email == "missing@x.com" and cr.first_name == "Dana"
+    assert config.TAG_INSTALL in cr.tags and config.TAG_SOURCE_APP in cr.tags
+    assert cr.props[config.PROP_RENDER_USER_ID] == "u9"
+    assert plan.touched == 2  # 1 tag-change (here) + 1 create (missing)
+
+
 def test_diff_fraction_uses_audience_size():
     desired = {f"{i}@x.com": DesiredContact(f"{i}@x.com", tags={config.TAG_INSTALL})
                for i in range(10)}

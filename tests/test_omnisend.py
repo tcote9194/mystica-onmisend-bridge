@@ -96,6 +96,41 @@ def test_add_tags_payload_and_version_header(monkeypatch):
     assert seen["version"]  # the required version header is present
 
 
+def test_create_contact_payload_subscribed(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "false")
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.raw_path.decode()
+        seen["method"] = request.method
+        seen["body"] = json.loads(request.content.decode())
+        return httpx.Response(200, json={"contactID": "new"})
+
+    _client(handler).create_contact(
+        "new@x.com", tags=["app: installed", "source: app"],
+        props={"render_user_id": "u1"}, first_name="Dana",
+    )
+    assert seen["method"] == "POST" and seen["path"].endswith("/contacts")
+    body = seen["body"]
+    ident = body["identifiers"][0]
+    assert ident["type"] == "email" and ident["id"] == "new@x.com"
+    assert ident["channels"]["email"]["status"] == "subscribed"
+    assert "statusChangedAt" in ident["channels"]["email"]
+    assert ident["consent"]["source"]  # consent recorded
+    assert body["tags"] == ["app: installed", "source: app"]
+    assert body["customProperties"] == {"render_user_id": "u1"}
+    assert body["firstName"] == "Dana"
+
+
+def test_create_contact_gated_in_dry_run(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
+    calls = []
+    res = _client(lambda r: calls.append(r) or httpx.Response(200, json={})).create_contact(
+        "new@x.com", tags=["app: installed"], props={},
+    )
+    assert res.get("dry_run") is True and calls == []
+
+
 def test_auth_error_raises(monkeypatch):
     monkeypatch.setenv("DRY_RUN", "false")
 

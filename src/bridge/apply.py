@@ -30,8 +30,8 @@ def apply_plan(
     *,
     force: bool = False,
     sleep: float = 0.0,
-) -> tuple[int, int]:
-    """Apply every change in ``plan``. Returns ``(applied, errors)``.
+) -> tuple[int, int, int]:
+    """Apply every change in ``plan``. Returns ``(applied, created, errors)``.
 
     Trips :class:`GuardrailTripped` BEFORE any write if the plan is too large and
     ``force`` is False. An auth error propagates immediately (the key is bad — retry
@@ -63,5 +63,22 @@ def apply_plan(
             log.warning("apply failed for %s: %s", change.email, exc)
         if sleep:
             time.sleep(sleep)
-    log.info("applied %d changes (%d errors)", applied, errors)
-    return applied, errors
+
+    # Create-and-tag the missing contacts (only present when --create-missing was set).
+    created = 0
+    for c in plan.creates:
+        try:
+            client.create_contact(
+                c.email, tags=list(c.tags), props=dict(c.props), first_name=c.first_name,
+            )
+            created += 1
+        except OmnisendAuthError:
+            raise
+        except Exception as exc:
+            errors += 1
+            log.warning("create failed for %s: %s", c.email, exc)
+        if sleep:
+            time.sleep(sleep)
+
+    log.info("applied %d changes, created %d contacts (%d errors)", applied, created, errors)
+    return applied, created, errors

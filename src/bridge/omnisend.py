@@ -21,6 +21,7 @@ import hashlib
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Iterator, Optional
 
 import httpx
@@ -46,6 +47,11 @@ class OmnisendError(RuntimeError):
 def _synthetic_id(payload: dict) -> str:
     blob = json.dumps(payload, sort_keys=True, default=str)
     return "dryrun-" + hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def _utc_now_iso() -> str:
+    """Current UTC time as an ISO-8601 ``...Z`` string (OmniSend statusChangedAt)."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class OmniSendClient:
@@ -222,6 +228,38 @@ class OmniSendClient:
         return self._mutate(
             "PATCH", f"/contacts/{contact_id}", {"customProperties": props}
         )
+
+    def create_contact(
+        self,
+        email: str,
+        *,
+        tags: list[str],
+        props: dict[str, Any],
+        first_name: str | None = None,
+        status: str | None = None,
+        now: str | None = None,
+    ) -> dict:
+        """Create (upsert) a contact with the given email-channel ``status`` + tags +
+        custom properties, in one call (POST /api/contacts). Records a consent source
+        for compliance. Gated by ``external_writes_enabled`` like every mutation."""
+        status = status or config.create_missing_status()
+        now = now or _utc_now_iso()
+        payload: dict[str, Any] = {
+            "identifiers": [
+                {
+                    "type": "email",
+                    "id": email,
+                    "channels": {"email": {"status": status, "statusChangedAt": now}},
+                    "consent": {"source": config.CREATE_CONSENT_SOURCE, "createdAt": now},
+                }
+            ],
+            "tags": list(tags),
+        }
+        if props:
+            payload["customProperties"] = props
+        if first_name:
+            payload["firstName"] = first_name
+        return self._mutate("POST", "/contacts", payload)
 
     def apply_change(
         self, contact_id: str, *, add_tags: list[str], set_props: dict[str, Any]

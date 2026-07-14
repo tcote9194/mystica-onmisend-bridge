@@ -93,6 +93,26 @@ def omnisend_version() -> str:
     return get("OMNISEND_VERSION") or "2026-03-15"
 
 
+# ---- Contact creation (--create-missing) --------------------------------------
+# Only used when the operator opts in with --create-missing: in-scope app users whose
+# email is NOT already an OmniSend contact get CREATED (then tagged in the same call).
+_CREATE_STATUS = {"subscribed": "subscribed", "unsubscribed": "unsubscribed",
+                  "nonsubscribed": "nonSubscribed", "non_subscribed": "nonSubscribed"}
+
+
+def create_missing_status() -> str:
+    """Email channel status for CREATED contacts. Default ``subscribed`` (Tom: app /
+    email signup carries the opt-in). Set ``CREATE_MISSING_STATUS=nonSubscribed`` to
+    create-and-tag without emailing until they opt in."""
+    return _CREATE_STATUS.get(get("CREATE_MISSING_STATUS").lower(), "subscribed")
+
+
+# Source tag + consent source recorded on created contacts (OmniSend strongly advises a
+# source tag; consent source is stored for compliance since we assert the subscription).
+TAG_SOURCE_APP = "source: app"
+CREATE_CONSENT_SOURCE = "Mystica app / email signup (Render)"
+
+
 def slack_bot_token() -> str:
     return get("SLACK_BOT_TOKEN")
 
@@ -118,6 +138,12 @@ def render_email_col() -> str:
 
 def render_installed_at_col() -> str:
     return get("RENDER_INSTALLED_AT_COL") or "created_at"
+
+
+def render_name_col() -> str:
+    """Display-name column on the users table (first token → OmniSend firstName when
+    creating a missing contact, so new contacts keep personalization)."""
+    return get("RENDER_NAME_COL") or "name"
 
 
 def render_signed_up_at_col() -> str:

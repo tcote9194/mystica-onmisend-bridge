@@ -151,6 +151,7 @@ def _run_sync(args, fn_name: str) -> int:
         force=args.force,
         max_contacts=args.max_contacts,
         write_findings=not args.no_findings,
+        create_missing=args.create_missing,
     )
     if fn_name == "run_membership":
         report, _ = pipeline.run_membership(**kwargs)
@@ -187,7 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--max-contacts", type=int, default=None,
                         help="cap OmniSend contacts scanned (testing)")
         sp.add_argument("--no-findings", action="store_true",
-                        help="don't append the run to FINDINGS.md")
+                        help="don't write the run report to data/runs/")
+        sp.add_argument("--create-missing", action="store_true",
+                        help="CREATE in-scope app users not yet in OmniSend (subscribed) "
+                             "and tag them, instead of skipping them")
 
     sp = sub.add_parser("validate", help="check config; print effective mode")
     sp.set_defaults(func=cmd_validate)

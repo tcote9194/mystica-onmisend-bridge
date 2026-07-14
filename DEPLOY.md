@@ -49,4 +49,19 @@ writing — so a misconfigured deploy fails safe.
   actually changed (near-zero), so they're fast and won't hit the write rate-limit the
   one-time backfill did.
 - Render access is read-only (enforced at the connection). The service only reads Render and
-  writes tags/custom-properties to OmniSend — it never creates OmniSend contacts.
+  writes tags/custom-properties to OmniSend.
+
+## Creating missing contacts (`--create-missing`)
+By default the service **only tags existing** OmniSend contacts (the cron start command has
+no `--create-missing`, so it never creates). In-scope app users not yet in OmniSend are
+skipped and counted as "unresolved".
+
+To create-and-tag those (as `subscribed`, per the app/email opt-in), run it manually:
+
+```
+DRY_RUN=false python -m bridge.cli run --live --create-missing   # dry-run first without --live
+```
+
+Set `CREATE_MISSING_STATUS=nonSubscribed` to create-and-tag without emailing until they opt in.
+To make the ongoing cron *also* create new app-only users automatically, add `--create-missing`
+to the Railway start command — otherwise creation stays a deliberate, manual action.

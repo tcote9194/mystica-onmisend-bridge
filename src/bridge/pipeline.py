@@ -57,10 +57,12 @@ def _finalize(
 ) -> tuple[RunReport, ChangePlan]:
     """Apply (if live) + print + persist + alert. Shared tail for every phase."""
     report.plan_touched = plan.touched
+    report.plan_creates = len(plan.creates)
     report.diff_fraction = plan.diff_fraction
     if live and config.external_writes_enabled():
-        applied, errors = apply_plan(plan, force=force)
+        applied, created, errors = apply_plan(plan, force=force)
         report.applied = applied
+        report.created = created
         report.errors = errors
     text = report_mod.render_report(plan, report)
     print(text)
@@ -77,6 +79,7 @@ def run_membership(
     force: bool = False,
     max_contacts: int | None = None,
     write_findings: bool = True,
+    create_missing: bool = False,
     render: RenderDB | None = None,
     omnisend: OmniSendClient | None = None,
 ) -> tuple[RunReport, ChangePlan]:
@@ -93,7 +96,7 @@ def run_membership(
     current = omnisend.load_current(max_contacts=max_contacts)
     report.omnisend_contacts = len(current)
 
-    plan = build_plan(desired, current)
+    plan = build_plan(desired, current, create_missing=create_missing)
     return _finalize(plan, report, live=live, force=force, write_findings=write_findings)
 
 
@@ -104,6 +107,7 @@ def run_interaction(
     since_days: int | None = None,
     max_contacts: int | None = None,
     write_findings: bool = True,
+    create_missing: bool = False,
     render: RenderDB | None = None,
     posthog: PostHogClient | None = None,
     omnisend: OmniSendClient | None = None,
@@ -129,7 +133,7 @@ def run_interaction(
     current = omnisend.load_current(max_contacts=max_contacts)
     report.omnisend_contacts = len(current)
 
-    plan = build_plan(desired, current)
+    plan = build_plan(desired, current, create_missing=create_missing)
     return _finalize(plan, report, live=live, force=force, write_findings=write_findings)
 
 
@@ -140,6 +144,7 @@ def run_all(
     since_days: int | None = None,
     max_contacts: int | None = None,
     write_findings: bool = True,
+    create_missing: bool = False,
     render: RenderDB | None = None,
     posthog: PostHogClient | None = None,
     omnisend: OmniSendClient | None = None,
@@ -181,5 +186,5 @@ def run_all(
     current = omnisend.load_current(max_contacts=max_contacts)
     report.omnisend_contacts = len(current)
 
-    plan = build_plan(desired, current)
+    plan = build_plan(desired, current, create_missing=create_missing)
     return _finalize(plan, report, live=live, force=force, write_findings=write_findings)

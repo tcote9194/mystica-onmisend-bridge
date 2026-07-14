@@ -112,6 +112,31 @@ def test_full_run_includes_reading_stage_tags(monkeypatch):
     assert by_email["abandoner@example.com"].add_tags == (config.TAG_READING_ABANDONED,)
 
 
+def test_create_missing_creates_unresolved_app_users(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
+    render = FakeRender([
+        RenderUser("u1", "alice@example.com", installed_at="2026-01-01", name="Alice Smith"),
+        RenderUser("u2", "bob@example.com", installed_at="2026-02-01", name="Bob"),  # not in OmniSend
+    ])
+    omnisend = _omnisend([  # only alice exists
+        {"id": "c1", "email": "alice@example.com", "tags": [], "customProperties": {}},
+    ])
+    # Without create_missing: bob is unresolved, no create.
+    report, plan = pipeline.run_all(
+        live=False, render=render, omnisend=omnisend, write_findings=False,
+    )
+    assert plan.unresolved_emails == 1 and not plan.creates
+
+    report, plan = pipeline.run_all(
+        live=False, render=render, omnisend=omnisend, write_findings=False,
+        create_missing=True,
+    )
+    assert report.plan_creates == 1 and len(plan.creates) == 1
+    cr = plan.creates[0]
+    assert cr.email == "bob@example.com" and cr.first_name == "Bob"
+    assert config.TAG_INSTALL in cr.tags and config.TAG_SOURCE_APP in cr.tags
+
+
 def test_full_run_posthog_source_when_selected(monkeypatch):
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("INTERACTION_SOURCE", "posthog")

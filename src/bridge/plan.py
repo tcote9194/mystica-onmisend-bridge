@@ -13,7 +13,14 @@ from __future__ import annotations
 
 import logging
 
-from bridge.models import ChangePlan, ContactChange, CurrentContact, DesiredContact
+from bridge import config
+from bridge.models import (
+    ChangePlan,
+    ContactChange,
+    CreateContact,
+    CurrentContact,
+    DesiredContact,
+)
 
 log = logging.getLogger("bridge.plan")
 
@@ -49,20 +56,34 @@ def build_plan(
     current: dict[str, CurrentContact],
     *,
     audience_size: int | None = None,
+    create_missing: bool = False,
 ) -> ChangePlan:
     """Build the change plan.
 
     ``audience_size`` is the guardrail denominator (defaults to the number of live
-    OmniSend contacts). Desired emails with no OmniSend contact are tallied as
-    ``unresolved_emails`` — a first-class metric, never a silent drop.
+    OmniSend contacts). A desired email with no OmniSend contact is either QUEUED FOR
+    CREATION (``create_missing=True``) or tallied as ``unresolved_emails`` — never a
+    silent drop.
     """
     changes: list[ContactChange] = []
+    creates: list[CreateContact] = []
     matched = 0
     unresolved = 0
     for email, d in desired.items():
         cur = current.get(email)
         if cur is None:
-            unresolved += 1
+            if create_missing:
+                # Create-and-tag: the new contact gets every desired tag + a source tag.
+                creates.append(
+                    CreateContact(
+                        email=email,
+                        tags=tuple(sorted(d.tags | {config.TAG_SOURCE_APP})),
+                        props=dict(d.props),
+                        first_name=d.first_name,
+                    )
+                )
+            else:
+                unresolved += 1
             continue
         matched += 1
         change = diff_contact(d, cur)
@@ -71,13 +92,14 @@ def build_plan(
 
     plan = ChangePlan(
         changes=changes,
+        creates=creates,
         desired_count=len(desired),
         matched_count=matched,
         unresolved_emails=unresolved,
         audience_size=audience_size if audience_size is not None else len(current),
     )
     log.info(
-        "plan: %d changes over %d matched (%d unresolved, %.1f%% of audience)",
-        plan.touched, matched, unresolved, plan.diff_fraction * 100,
+        "plan: %d changes + %d creates over %d matched (%d unresolved, %.1f%% of audience)",
+        len(changes), len(creates), matched, unresolved, plan.diff_fraction * 100,
     )
     return plan

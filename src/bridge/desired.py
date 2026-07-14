@@ -61,6 +61,8 @@ def membership_desired(roster: Iterable[RenderUser]) -> dict[str, DesiredContact
             continue
         uid = normalize_user_id(u.user_id)
         d = out.get(email) or DesiredContact(email=email)
+        if u.first_name and not d.first_name:
+            d.first_name = u.first_name  # only used if the contact must be created
         d.tags.add(config.TAG_INSTALL)
         d.tags.update(legacy)  # dual-write legacy spellings during transition (if any)
         if uid:
@@ -150,7 +152,9 @@ def combine(*parts: dict[str, DesiredContact]) -> dict[str, DesiredContact]:
         for email, d in part.items():
             existing = out.get(email)
             if existing is None:
-                out[email] = DesiredContact(email=email, tags=set(d.tags), props=dict(d.props))
+                out[email] = DesiredContact(
+                    email=email, tags=set(d.tags), props=dict(d.props),
+                    first_name=d.first_name)
             else:
                 existing.merge(d)
     return out

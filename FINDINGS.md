@@ -95,3 +95,9 @@ T2_ADOPTER / T2_NONADOPTER segment sizes.
 ---
 
 _Run reports (with per-contact detail) are written to the gitignored `data/runs/` directory, not appended here — this file stays a PII-free investigation log._
+
+
+
+---
+
+_Run reports (with per-contact detail) are written to the gitignored `data/runs/` directory, not appended here — this file stays a PII-free investigation log._
