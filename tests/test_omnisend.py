@@ -155,6 +155,40 @@ def test_retry_then_success(monkeypatch):
     assert state["n"] == 3  # two retries then success
 
 
+def test_429_honors_retry_after_body(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "false")
+    state = {"n": 0}
+    slept: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        state["n"] += 1
+        if state["n"] == 1:
+            return httpx.Response(429, json={"status": 429, "retryAfter": 33})
+        return httpx.Response(200, json={"contactID": "cid"})
+
+    client = OmniSendClient(api_key="k", transport=httpx.MockTransport(handler),
+                            sleep=lambda s: slept.append(s))
+    client.add_tags(["cid"], ["app: login"])
+    assert state["n"] == 2                     # retried after the 429
+    assert slept == [34.0]                     # retryAfter (33) + 1s cushion, not the 0.5s backoff
+
+
+def test_429_retry_after_capped(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "false")
+    slept: list[float] = []
+    state = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        state["n"] += 1
+        if state["n"] == 1:
+            return httpx.Response(429, json={"retryAfter": 9999})  # absurd → capped
+        return httpx.Response(200, json={})
+
+    OmniSendClient(api_key="k", transport=httpx.MockTransport(handler),
+                   sleep=lambda s: slept.append(s)).add_tags(["c"], ["t"])
+    assert slept == [60.0]                      # capped at _RETRY_AFTER_CAP_SEC
+
+
 def test_get_contact_by_email_returns_first_or_none():
     def handler(request: httpx.Request) -> httpx.Response:
         email = dict(request.url.params).get("email")

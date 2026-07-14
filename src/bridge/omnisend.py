@@ -34,6 +34,34 @@ log = logging.getLogger("bridge.omnisend")
 
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 _AUTH_STATUS = {401, 403}
+_RETRY_AFTER_CAP_SEC = 60.0  # OmniSend's rate window is <=60s; never sleep longer than this
+
+
+def _retry_after_seconds(r: "httpx.Response", fallback: float) -> float:
+    """Seconds to wait before retrying a 429, honoring OmniSend's own instruction.
+
+    OmniSend puts the wait in the JSON body (``"retryAfter": N``) and/or the standard
+    ``Retry-After`` header. We honor it (capped at ``_RETRY_AFTER_CAP_SEC``) so writes
+    pace to the rate limit instead of hammering and failing; falls back to ``fallback``
+    (the exponential-backoff delay) when neither is present/parseable."""
+    val: Optional[float] = None
+    try:
+        body = r.json()
+        if isinstance(body, dict) and body.get("retryAfter") is not None:
+            val = float(body["retryAfter"])
+    except Exception:  # non-JSON body
+        pass
+    if val is None:
+        header = r.headers.get("Retry-After")
+        if header:
+            try:
+                val = float(header)
+            except ValueError:  # HTTP-date form — not worth parsing; use fallback
+                val = None
+    if val is None or val < 0:
+        return fallback
+    # +1s cushion so we retry just AFTER the window opens, not on its exact edge.
+    return min(val + 1.0, _RETRY_AFTER_CAP_SEC)
 
 
 class OmnisendAuthError(RuntimeError):
@@ -119,7 +147,11 @@ class OmniSendClient:
                     raise OmnisendAuthError(f"{r.status_code} on {method} {path}")
                 if r.status_code in _RETRY_STATUS and attempt < config.HTTP_MAX_RETRIES:
                     last = r
-                    self._sleep(delay)
+                    # For 429s, wait as long as OmniSend asks (Retry-After) — the fixed
+                    # exponential backoff is far shorter than the rate window, so without
+                    # this the retry budget burns in seconds and the write fails.
+                    wait = _retry_after_seconds(r, delay) if r.status_code == 429 else delay
+                    self._sleep(wait)
                     delay *= 2
                     continue
                 if r.status_code >= 400:
