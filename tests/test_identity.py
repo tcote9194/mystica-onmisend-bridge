@@ -9,6 +9,15 @@ def test_normalize_email_lowercases_and_trims():
     assert normalize_email("") == ""
 
 
+def test_normalize_email_strips_invisible_unicode():
+    # real Render junk: a bidi POP DIRECTIONAL ISOLATE (⁩) inside the address made
+    # the same contact look perpetually uncreated (Render side had it, OmniSend didn't).
+    assert normalize_email("divyankasehdev⁩96@gmail.com") == "divyankasehdev96@gmail.com"
+    # zero-width space + BOM also removed; a clean address is untouched.
+    assert normalize_email("a​b﻿@x.com") == "ab@x.com"
+    assert normalize_email("clean@x.com") == "clean@x.com"
+
+
 def test_normalize_user_id_trims_but_preserves_case():
     assert normalize_user_id("  Ab12 ") == "Ab12"
     assert normalize_user_id(None) == ""

@@ -11,20 +11,29 @@ small enough to pull whole once per run — see render_db.fetch_roster).
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Iterable, Optional
 
 from bridge.models import RenderUser
 
 
 def normalize_email(value: object) -> str:
-    """Lowercase + trim — the single canonical form used as the OmniSend join key.
+    """Lowercase + trim + drop invisible Unicode — the canonical OmniSend join key.
 
     Matches the engine's Clarity source idiom (``str(...).strip().lower()``) so the
-    two services key contacts identically. Returns "" for falsy input.
+    two services key contacts identically, and additionally strips Unicode control
+    (Cc) and format (Cf) characters — bidi isolates (e.g. ``\\u2069``), zero-width
+    spaces, BOM — that app-collected emails sometimes carry. Such an invisible char
+    makes the *same* address fail to match between Render and OmniSend, so the contact
+    looks perpetually "uncreated" and re-churns on every cron run. Returns "" for falsy
+    input. NOTE: keep this in lockstep with any normalization the engine applies.
     """
     if value in (None, ""):
         return ""
-    return str(value).strip().lower()
+    s = str(value).strip().lower()
+    if any(unicodedata.category(ch) in ("Cc", "Cf") for ch in s):
+        s = "".join(ch for ch in s if unicodedata.category(ch) not in ("Cc", "Cf"))
+    return s
 
 
 def normalize_user_id(value: object) -> str:
