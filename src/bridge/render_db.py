@@ -140,6 +140,17 @@ class RenderDB:
         # 6th column: display name (for firstName on contact creation).
         name = config.render_name_col().strip()
         parts.append(self._qi(name) if name else "NULL")
+        # 7th column: login-active flag — last_seen within the login window (drives
+        # ``app: login``). Computed in SQL with now() (like the roster recency filter);
+        # NULL/false when the window is disabled or there's no last_seen column.
+        login_days = config.render_login_within_days()
+        if login_days > 0 and last_seen:
+            # login_days is an int from config (not user input) — safe to inline.
+            parts.append(
+                f"({self._qi(last_seen)} >= now() - interval '{login_days} days')"
+            )
+        else:
+            parts.append("false")
         sql = f"SELECT {', '.join(parts)} FROM {self._qi(config.render_users_table())}"
         where = self._customer_where()
         if where:
@@ -155,7 +166,7 @@ class RenderDB:
         """
         rows = self._select(self._roster_sql())
         out: list[RenderUser] = []
-        for uid, email, installed_at, signed_up_at, last_seen_at, name in rows:
+        for uid, email, installed_at, signed_up_at, last_seen_at, name, login_active in rows:
             out.append(
                 RenderUser(
                     user_id=str(uid) if uid is not None else "",
@@ -164,6 +175,7 @@ class RenderDB:
                     signed_up_at=(str(signed_up_at) if signed_up_at is not None else None),
                     last_seen_at=(str(last_seen_at) if last_seen_at is not None else None),
                     name=(str(name) if name not in (None, "") else None),
+                    login_active=bool(login_active),
                 )
             )
         log.info("render roster: %d users", len(out))

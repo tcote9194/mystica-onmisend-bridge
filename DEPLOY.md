@@ -52,16 +52,14 @@ writing — so a misconfigured deploy fails safe.
   writes tags/custom-properties to OmniSend.
 
 ## Creating missing contacts (`--create-missing`)
-By default the service **only tags existing** OmniSend contacts (the cron start command has
-no `--create-missing`, so it never creates). In-scope app users not yet in OmniSend are
-skipped and counted as "unresolved".
+The cron start command **includes `--create-missing`** (railpack.json), so each run also
+CREATES in-scope app users not yet in OmniSend (as `subscribed`, per the app/email opt-in) —
+brand-new app users get created and tagged automatically, not just existing contacts.
 
-To create-and-tag those (as `subscribed`, per the app/email opt-in), run it manually:
+Set `CREATE_MISSING_STATUS=nonSubscribed` to create without emailing until they opt in. To make
+the cron tag-only again (never create), remove `--create-missing` from the start command; then
+creation becomes a deliberate manual run:
 
 ```
 DRY_RUN=false python -m bridge.cli run --live --create-missing   # dry-run first without --live
 ```
-
-Set `CREATE_MISSING_STATUS=nonSubscribed` to create-and-tag without emailing until they opt in.
-To make the ongoing cron *also* create new app-only users automatically, add `--create-missing`
-to the Railway start command — otherwise creation stays a deliberate, manual action.

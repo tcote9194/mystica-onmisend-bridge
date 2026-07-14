@@ -39,6 +39,20 @@ def test_membership_feeds_last_seen_from_render():
     assert desired["a@x.com"].props[config.PROP_LAST_SEEN] == "2026-07-01"
 
 
+def test_membership_login_tag_rides_login_active_flag():
+    from bridge.models import RenderUser
+
+    desired = membership_desired([
+        RenderUser("u1", "active@x.com", installed_at="2026-01-01", login_active=True),
+        RenderUser("u2", "dormant@x.com", installed_at="2026-01-01", login_active=False),
+    ])
+    # active: installed + login ; dormant: installed but NOT login
+    assert config.TAG_LOGIN in desired["active@x.com"].tags
+    assert config.TAG_INSTALL in desired["active@x.com"].tags
+    assert config.TAG_LOGIN not in desired["dormant@x.com"].tags
+    assert config.TAG_INSTALL in desired["dormant@x.com"].tags
+
+
 def test_write_distinct_id_off_but_render_id_still_written(monkeypatch, roster):
     monkeypatch.setenv("WRITE_DISTINCT_ID_ON_INSTALL", "false")
     desired = membership_desired(roster)

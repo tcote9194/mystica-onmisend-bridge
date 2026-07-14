@@ -101,12 +101,13 @@ def test_recency_cutoff_applied_to_roster_and_interaction(monkeypatch):
 def test_recency_cutoff_disabled_with_zero(monkeypatch):
     monkeypatch.setenv("RENDER_ROSTER_WHERE", "user_role = 'user'")
     monkeypatch.setenv("RENDER_ACTIVE_WITHIN_DAYS", "0")  # explicitly disable the cutoff
+    monkeypatch.setenv("RENDER_LOGIN_WITHIN_DAYS", "0")   # isolate: no login-window interval
     sql = RenderDB(dsn="x")._roster_sql()
     assert "interval" not in sql
 
 
 def test_fetch_roster_maps_columns(monkeypatch):
-    rows = [("u1", "a@x.com", "2026-01-01", "2026-01-01", "2026-07-01", "Alice Smith")]
+    rows = [("u1", "a@x.com", "2026-01-01", "2026-01-01", "2026-07-01", "Alice Smith", True)]
     db = RenderDB(dsn="x", connect=_factory(lambda sql: rows))
     roster = db.fetch_roster()
     assert roster[0].user_id == "u1"
@@ -114,6 +115,22 @@ def test_fetch_roster_maps_columns(monkeypatch):
     assert roster[0].last_seen_at == "2026-07-01"
     assert roster[0].name == "Alice Smith"
     assert roster[0].first_name == "Alice"  # first token of the display name
+    assert roster[0].login_active is True   # 7th column drives app: login
+
+
+def test_roster_sql_includes_login_window_when_enabled(monkeypatch):
+    monkeypatch.setenv("RENDER_LAST_SEEN_COL", "last_seen_at")
+    monkeypatch.setenv("RENDER_LOGIN_WITHIN_DAYS", "30")
+    sql = RenderDB(dsn="x")._roster_sql()
+    assert "\"last_seen_at\" >= now() - interval '30 days'" in sql
+
+
+def test_roster_sql_login_flag_disabled_with_zero(monkeypatch):
+    monkeypatch.setenv("RENDER_LAST_SEEN_COL", "last_seen_at")
+    monkeypatch.setenv("RENDER_LOGIN_WITHIN_DAYS", "0")  # disable the login tag
+    sql = RenderDB(dsn="x")._roster_sql()
+    # the 30-day interval must NOT appear as a login column (roster cutoff is separate)
+    assert "interval '30 days'" not in sql
 
 
 def test_fetch_interaction_aggregates_merges_chats_draws_readings(monkeypatch):

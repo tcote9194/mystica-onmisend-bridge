@@ -34,10 +34,10 @@ Render turns out to hold a far richer dataset than OmniSend sees — **~35,000 a
 ### B. App membership — "has an account / installed" (tags)
 | Tag | Writer | Status | Notes |
 |---|---|---|---|
-| `app: signup` | **Render** | ✅ exists, **backfill 35k** | The big fix. Currently ~600; should be ~35k. |
-| `app: installed` | Render | ✅ exists | Keep. |
-| `app: login` | Render | ✅ exists | Keep. |
-| `app: updated` | Render | ✅ exists | Keep. |
+| `app: signup` | **Bridge** (Render) | ✅ emitted | On `created_at` (every account). Bridge owns it. |
+| `app: installed` | **Bridge** (Render) | ✅ emitted | On `created_at` (every account). Bridge owns it. |
+| `app: login` | **Bridge** (Render) | ✅ emitted | Recently active: `last_seen` within `RENDER_LOGIN_WITHIN_DAYS` (default 30d, ~2,196). Add-only, so it marks "was active in 30d at some point" — for a live rolling segment, filter the `app_last_active` property. |
+| `app: updated` | n8n only | ⚠️ **not reproducible** | No app-version/update field in Render — the bridge can't derive this. If a segment depends on it, keep its source or drop the tag before fully retiring n8n. |
 
 ### C. App activity — "has ever done" (tags)
 | Tag | Writer | Status | Notes |
@@ -146,6 +146,23 @@ Definitions updated 2026-07-14: closure-release routing + PARTIAL-order fix (buy
 - **Adopter · Winback (app-inactive ≥7d)** = #7 AND `app_last_active` exists AND `app_last_active` **notInTheLast** 7d. Matches the engine's `WINBACK_APP_INACTIVE_DAYS = 7`. This is the "jumped in once, didn't continue" group.
 
 **Engine staging map (Pilot cells → OmniSend segment ID → copy plan):** Ex Connected `…adab1a` → NEW_LEAD/ex_connected copy · Ex Cold `…afd0e7` → NEW_LEAD/ex_cold · Soulmate `…afd0e8` → NEW_LEAD/soulmate_seeker · General `…adab1b` → NEW_LEAD/general · New Buyer `…afd0e9` → T2_NEW_BUYER · Non-adopter `…adab1d` → T2_NONADOPTER · App Adopter `…adab1c` → T2_ADOPTER · Subscriber `…e3ed` → T2_SUBSCRIBER. The engine stages one campaign per cell against its segment ID; OmniSend owns who is in each.
+
+---
+
+## Heat / engagement tiers — the frequency throttle (2026-07-14)
+
+**Two layers:** the **segment (stage) decides WHAT** a contact gets; the **tier (heat) decides HOW MANY** they get that day. **Email-only — does NOT affect OneSignal** (push has its own app-active gate). Signal = OmniSend-native `opened` / `clicked message` events (Email channel) — the reliable engagement signal that replaces the engine's broken `updatedAt` proxy. Clicks weighted over opens (opens are inflated by Apple Mail privacy).
+
+| Tier | Measured by (last email open/click) | Segment ID | Band count | Emails/day |
+|---|---|---|---|---|
+| **Hot** | clicked ≤30d **OR** new lead (added ≤30d) | `6a56b6ca0214b2a445afd14c` | 20,962 | **2** (both slots) |
+| **Warm** | opened/clicked ≤60d | `6a56b6cdc19ef5cfaa55e558` | 43,368 | **1** (Slot A) |
+| **Cold** | engagement evidence ≤180d (→ 60–180d after precedence) | `6a56b6d2ecba2f618e76927a` | 54,680 | **~2–3/week** |
+| **Dormant** | no open/click 180d+ | `6a56b6d5ecba2f618e76927b` | 6,820 | **0** — suppress (manual sales blasts only) |
+
+Boundaries **30 / 60 / 180** (founder-set 2026-07-14; the Hot window may widen later — a one-field edit). The tiers are nested recency **bands** (Hot ⊆ Warm ⊆ Cold); **precedence Hot > Warm > Cold > Dormant** assigns each contact exactly one tier at send. **Rationale:** this *throttles* frequency rather than *excluding* warm/cold (the prior system cut them off entirely, killing engagement) — only 180-day dormant contacts leave the daily engine.
+
+**How it layers in (the engine "stage ∩ tier" build, pending):** each slot's campaign audience = the stage segment intersected with the tier — Slot A (8am) → Hot+Warm (+Cold on reduced days); Slot B (6pm) → Hot only; Dormant excluded. Implementation notes: (a) OmniSend campaign audiences UNION their included segments, so `stage ∩ tier` is achieved via **exclusion layering** (include stage, exclude the tiers that shouldn't get this slot) or pre-intersected segments; (b) true suppress = Dormant AND added >180d — a recent-but-never-engaged contact resolves to **Cold** by precedence, not Dormant. The engine's internal `compute_tier` (broken `updatedAt` signal) is retired in favor of these segments.
 
 **Stage → segment map for the pilot:** Lead → #1–4 (#4 default) · New Buyer → #5 · Non-adopter → #6 · Adopter → #7 (all-time) / #8 (active) · Subscriber → #9 · engagement refinement → #10. Overlaps resolve at **send time** via include/exclude layering (one segment per person).
 

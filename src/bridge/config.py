@@ -159,6 +159,18 @@ def render_last_seen_at_col() -> str:
     return get("RENDER_LAST_SEEN_COL") or "last_seen_at"
 
 
+def render_login_within_days() -> int:
+    """Window for the ``app: login`` tag: a rostered user gets it when their last-seen
+    is within this many days (a "currently active / recently logged in" signal, distinct
+    from ``app: installed`` which every account has). Default 30. Set ``=0`` to disable
+    the login tag. Independent of ``render_active_within_days`` (the roster cutoff)."""
+    raw = get("RENDER_LOGIN_WITHIN_DAYS")
+    try:
+        return max(0, int(raw)) if raw else 30
+    except ValueError:
+        return 30
+
+
 def render_roster_where() -> str:
     """A trusted SQL WHERE fragment appended to the roster query (NOT user input —
     it's our own config). Scopes the roster to real customers and excludes advisors /
@@ -319,6 +331,7 @@ RENDER_FETCH_CHUNK = 5000
 # `bridge baseline` before the backfill; a mismatch would create a parallel tag.
 TAG_INSTALL = "app: installed"
 TAG_SIGNUP = "app: signup"
+TAG_LOGIN = "app: login"  # recently-active login (last_seen within RENDER_LOGIN_WITHIN_DAYS)
 TAG_CHAT = "app: chat"
 TAG_DAILY_DRAW = "app: daily_draw"
 TAG_READING = "app: reading"

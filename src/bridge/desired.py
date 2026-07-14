@@ -50,7 +50,8 @@ def membership_desired(roster: Iterable[RenderUser]) -> dict[str, DesiredContact
 
     A user with no email can't be a join target and is skipped here (they still feed
     the identity bridge). Every rostered user gets ``render_user_id`` (the identity
-    anchor) + ``app: installed``; ``app: signup`` rides on the signup fact.
+    anchor) + ``app: installed``; ``app: signup`` rides on the signup fact; ``app: login``
+    rides on the login-active flag (last_seen within ``RENDER_LOGIN_WITHIN_DAYS``).
     """
     legacy = config.legacy_dual_write_tags()
     write_distinct = config.write_distinct_id_on_install()
@@ -73,6 +74,9 @@ def membership_desired(roster: Iterable[RenderUser]) -> dict[str, DesiredContact
         if u.signed_up_at:
             d.tags.add(config.TAG_SIGNUP)
             d.props[config.PROP_SIGNED_UP_AT] = u.signed_up_at
+        if u.login_active:
+            # "Recently logged in" — a currently-active signal distinct from installed.
+            d.tags.add(config.TAG_LOGIN)
         # Render tracks app recency natively — feed the engine's recency signal now,
         # without waiting on PostHog.
         _set_recency(d, u.last_seen_at)

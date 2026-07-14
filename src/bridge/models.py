@@ -21,6 +21,7 @@ class RenderUser:
     signed_up_at: Optional[str] = None
     last_seen_at: Optional[str] = None   # Render tracks app recency natively (bonus)
     name: Optional[str] = None           # display name (→ firstName on contact creation)
+    login_active: bool = False           # last_seen within the login window → app: login
 
     @property
     def has_email(self) -> bool:
