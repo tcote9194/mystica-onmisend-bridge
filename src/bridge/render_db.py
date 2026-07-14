@@ -43,6 +43,10 @@ def _clean_dsn(raw: Optional[str]) -> str:
     m = re.search(r"postgres(?:ql)?://", s)
     if m:
         s = s[m.start():]
+    # A valid Postgres URL contains no whitespace, so cut at the first whitespace
+    # char: this drops a second ``VAR=…`` line that got pasted onto this value (the
+    # newline made libpq read ``sslmode=require\nOMNISEND_API_KEY=…`` as one bad param).
+    s = re.split(r"\s", s, maxsplit=1)[0]
     return s.strip().strip("'\"").strip()
 
 

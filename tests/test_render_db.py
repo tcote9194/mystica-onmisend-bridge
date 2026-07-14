@@ -62,6 +62,8 @@ def test_clean_dsn_unmangles_railway_paste_variants():
         "psql_prefix": "psql " + base,
         "spaced": "  " + base + "  ",
         "crlf": "\r\n" + base + "\r\n",
+        # the real Railway crash: a whole second dotenv line pasted onto the value
+        "multiline_paste": "=" + base + "\nOMNISEND_API_KEY=69a359-secret",
     }
     for label, raw in variants.items():
         assert _clean_dsn(raw) == base, label
