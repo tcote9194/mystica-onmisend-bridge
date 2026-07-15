@@ -1,10 +1,15 @@
 # Mystica Tagging Bridge
 
-**Status: BUILT + Render side VALIDATED against live data (2026-07-13). Only the OmniSend API key remains to run the diff + write.** Service under `src/bridge/` with a full unit-test suite (39 tests, all green, no network). Dry-run by default; nothing has written to OmniSend.
+**Status: LIVE (2026-07-14).** Deployed on Railway (project `courageous-charisma`, service
+`mystica-onmisend-bridge`), reconciling Render → OmniSend tags every 15 minutes. 57 unit tests,
+all green. The initial backfill + `app: login` fill are done; the cron auto-creates new app users.
 
-**Phase 0 result (see `FINDINGS.md`):** Render has **35,798 customer app-users** (vs ~600 tagged in OmniSend today), all with email. **Architecture change:** chats + daily draws live in Render keyed by `user_id`, so the interaction sync runs **from Render, not PostHog** — a lossless `user_id → email` join (100% resolution on 5,767 interaction users), which removes the identity-join loss that was the whole problem. **PostHog is now optional.**
+➡️ **`OPERATIONS.md` is the operator's system-of-record** — what it writes, config, the runbook,
+troubleshooting, and design decisions. Read that to run or debug the live service. This README is
+the original problem + architecture context (some tag spellings below predate the live `app: `
+namespaced set — see `OPERATIONS.md` §4 / `TAG_TAXONOMY.md` for the current names).
 
-This README is the problem + architecture context; `EXECUTION_PLAN.md` is the build/run plan and `FINDINGS.md` is the Phase-0 log the CLI appends run reports to. To run once the OmniSend key is set: `bridge baseline` → `bridge membership` (dry-run) → review → live.
+**Phase 0 result (see `FINDINGS.md`):** Render has **35,798 customer app-users** (vs ~600 tagged in OmniSend before), all with email. **Architecture:** chats + daily draws live in Render keyed by `user_id`, so the interaction sync runs **from Render, not PostHog** — a lossless `user_id → email` join, which removes the identity-join loss that was the whole problem. **PostHog is optional.**
 
 A dedicated service (the "identity + tagging bridge") that gets **reliable, complete app-behavioral and membership data into OmniSend as tags/custom fields**, so the Mystica Lifecycle Engine's segments route people correctly.
 
